@@ -1,4 +1,3 @@
-
 const express = require("express");
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
@@ -24,49 +23,80 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-// 👉 CREATE ORDER
-app.post("/create-order", async (req, res) => {
 
-  const { amount } = req.body;   // 🔥 GET FROM FRONTEND
-
-  const order = await razorpay.orders.create({
-    amount: amount,              // ✅ dynamic amount
-    currency: "INR"
-  });
-
-  res.json(order);
+// ✅ ROOT ROUTE (for testing)
+app.get("/", (req, res) => {
+  res.send("Backend is running 🚀");
 });
-// 👉 VERIFY PAYMENT
-app.post("/verify-payment", async (req, res) => {
 
-  const {
-    razorpay_order_id,
-    razorpay_payment_id,
-    razorpay_signature,
-    uid
-  } = req.body;
 
-  const sign = razorpay_order_id + "|" + razorpay_payment_id;
+// 👉 CREATE ORDER (FIXED + SAFE)
+app.post("/create-order", async (req, res) => {
+  try {
+    console.log("🔥 Create order called");
 
-  const expectedSign = crypto
-    .createHmac("sha256", "ZL0fGV3bv6a0aAExAB66EgxH")
-    .update(sign)
-    .digest("hex");
+    const { amount } = req.body;
 
-  if(expectedSign === razorpay_signature){
+    if (!amount) {
+      return res.status(400).json({ error: "Amount missing" });
+    }
 
-    await db.collection("users").doc(uid).update({
-      paid: true,
-      expiryDate: Date.now() + (30*24*60*60*1000)
+    const order = await razorpay.orders.create({
+      amount: amount,
+      currency: "INR"
     });
 
-    res.json({ success: true });
+    res.json(order);
 
-  } else {
-    res.json({ success: false });
+  } catch (err) {
+    console.error("❌ Create order error:", err);
+    res.status(500).json({ error: "Order creation failed" });
   }
 });
 
-app.listen(5000, () => {
-  console.log("Server running on http://localhost:5000");
+
+// 👉 VERIFY PAYMENT (FIXED + SAFE)
+app.post("/verify-payment", async (req, res) => {
+  try {
+    console.log("🔥 Verify payment called");
+
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      uid
+    } = req.body;
+
+    const sign = razorpay_order_id + "|" + razorpay_payment_id;
+
+    const expectedSign = crypto
+      .createHmac("sha256", "ZL0fGV3bv6a0aAExAB66EgxH")
+      .update(sign)
+      .digest("hex");
+
+    if (expectedSign === razorpay_signature) {
+
+      await db.collection("users").doc(uid).set({
+        paid: true,
+        expiryDate: Date.now() + (30 * 24 * 60 * 60 * 1000)
+      }, { merge: true });
+
+      return res.json({ success: true });
+
+    } else {
+      return res.json({ success: false });
+    }
+
+  } catch (err) {
+    console.error("❌ Verify error:", err);
+    res.status(500).json({ error: "Verification failed" });
+  }
+});
+
+
+// ✅ PORT FIX (IMPORTANT FOR RENDER)
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
 });
