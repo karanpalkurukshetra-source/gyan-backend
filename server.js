@@ -10,8 +10,8 @@ app.use(cors());
 
 // 🔐 Razorpay keys
 const razorpay = new Razorpay({
-  key_id: "rzp_test_SerE3RxUlQTa9d",
-  key_secret: "ZL0fGV3bv6a0aAExAB66EgxH"
+  key_id: "rzp_live_SogWXmhEcYLSxM",
+  key_secret: "A5H88ZlufcD7Oou2pd1bIuBz"
 });
 
 // 🔥 Firebase Admin
@@ -36,16 +36,18 @@ app.post("/create-order", async (req, res) => {
     console.log("🔥 Create order called");
 
     const { amount } = req.body;
+    console.log("RECEIVED AMOUNT:", amount);
 
     if (!amount) {
       return res.status(400).json({ error: "Amount missing" });
     }
 
     const order = await razorpay.orders.create({
-      amount: amount,
+amount: Number(amount),
       currency: "INR"
     });
-
+console.log(order);
+console.log("ORDER ID:", order.id);
     res.json(order);
 
   } catch (err) {
@@ -61,25 +63,32 @@ app.post("/verify-payment", async (req, res) => {
     console.log("🔥 Verify payment called");
 
     const {
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
-      uid
-    } = req.body;
+  razorpay_order_id,
+  razorpay_payment_id,
+  razorpay_signature,
+  uid,
+  subject
+} = req.body;
 
     const sign = razorpay_order_id + "|" + razorpay_payment_id;
 
     const expectedSign = crypto
-      .createHmac("sha256", "ZL0fGV3bv6a0aAExAB66EgxH")
+      .createHmac("sha256", "A5H88ZlufcD7Oou2pd1bIuBz")
       .update(sign)
       .digest("hex");
 
     if (expectedSign === razorpay_signature) {
 
-      await db.collection("users").doc(uid).set({
-        paid: true,
-        expiryDate: Date.now() + (30 * 24 * 60 * 60 * 1000)
-      }, { merge: true });
+      const expiry = Date.now() + (30 * 24 * 60 * 60 * 1000);
+
+await db.collection("users").doc(uid).set({
+  subjects: {
+    [subject]: {
+      active: true,
+      expiryDate: expiry
+    }
+  }
+}, { merge: true });
 
       return res.json({ success: true });
 
